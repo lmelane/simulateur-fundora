@@ -47,7 +47,7 @@ const CreateStrategy: React.FC = () => {
   const initialValues: CreateStrategyFormValues = {
     name: '',
     totalAllocation: 1000000,
-    targetFundPercentage: 80,
+    targetFundPercentage: 20, // Modifié de 80% à 20%
     startDate: new Date(),
     investmentHorizon: new Date(new Date().setFullYear(new Date().getFullYear() + 10)),
   };
@@ -101,12 +101,27 @@ const CreateStrategy: React.FC = () => {
       const lastName = lastNames[Math.floor(Math.random() * lastNames.length)];
       const fullName = `${firstName} ${lastName}`;
 
-      // Montant d'investissement entre 100 et 30 000 euros
-      const investedAmount = Math.round(100 + Math.random() * 29900);
+      // Montant d'investissement entre 100 et 10 000 euros
+      const investedAmount = Math.round(100 + Math.random() * 9900);
+      
+      // Générer un solde initial réaliste
+      // 20% de chance d'avoir exactement le montant investi (0 dans le wallet après investissement)
+      // 80% de chance d'avoir un solde supplémentaire (entre 500 et 8 500 euros en plus)
+      let initialBalance;
+      
+      if (Math.random() < 0.2) {
+        // 20% des investisseurs n'ont que le montant exact qu'ils investissent
+        initialBalance = investedAmount;
+      } else {
+        // 80% des investisseurs ont un solde supplémentaire
+        const additionalBalance = Math.round(500 + Math.random() * 8000);
+        initialBalance = investedAmount + additionalBalance;
+      }
 
       investors.push({
         name: fullName,
         investedAmount,
+        initialBalance,
         // Ces propriétés seront calculées par addInvestorsToStrategy
         // mais nous devons les initialiser pour TypeScript
         wallets: {
@@ -125,7 +140,7 @@ const CreateStrategy: React.FC = () => {
         }
       });
     }
-
+    
     return investors;
   };
 
@@ -227,6 +242,10 @@ const CreateStrategy: React.FC = () => {
                       onChange={(date) => {
                         if (date) {
                           setFieldValue('startDate', date);
+                          // Mettre à jour automatiquement l'horizon d'investissement à +10 ans
+                          const horizonDate = new Date(date);
+                          horizonDate.setFullYear(horizonDate.getFullYear() + 10);
+                          setFieldValue('investmentHorizon', horizonDate);
                         }
                       }}
                       slotProps={{

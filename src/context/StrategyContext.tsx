@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { Strategy, Investor, SansoSimulation, PEDistribution } from '../types/models';
+import { Strategy, Investor, SansoSimulation, PEDistribution, CapTableEntry } from '../types/models';
 
 // Clés pour le stockage local
 const STRATEGIES_STORAGE_KEY = 'fundora_strategies';
@@ -9,14 +9,32 @@ const CURRENT_STRATEGY_STORAGE_KEY = 'fundora_current_strategy';
 interface StrategyContextType {
   strategies: Strategy[];
   currentStrategy: Strategy | null;
-  setCurrentStrategy: (strategy: Strategy | null) => void;
+  setCurrentStrategy: (strategy: Strategy) => void;
   createStrategy: (strategyData: Omit<Strategy, 'id' | 'investors' | 'createdAt'>) => Strategy;
   addInvestorsToStrategy: (strategyId: string, investors: Omit<Investor, 'id' | 'ownershipPercentage' | 'wallets' | 'transactions' | 'history'>[]) => void;
   simulateSansoInterest: (strategyId: string, simulation: SansoSimulation) => void;
   simulatePEDistribution: (strategyId: string, distribution: PEDistribution) => void;
+  getCapTable: (strategyId: string) => CapTableEntry[];
+  getInvestorById: (investorId: string) => Investor | undefined;
+  getInvestorStrategies: (investorId: string) => Strategy[];
+  getTotalSansoInterest: (investorId: string) => number;
+  investors: Investor[];
 }
 
-const StrategyContext = createContext<StrategyContextType | undefined>(undefined);
+const StrategyContext = createContext<StrategyContextType>({
+  strategies: [],
+  currentStrategy: null,
+  setCurrentStrategy: () => {},
+  createStrategy: () => ({} as Strategy),
+  addInvestorsToStrategy: () => {},
+  simulateSansoInterest: () => {},
+  simulatePEDistribution: () => {},
+  getCapTable: () => [],
+  getInvestorById: () => undefined,
+  getInvestorStrategies: () => [],
+  getTotalSansoInterest: () => 0,
+  investors: [],
+});
 
 export const useStrategy = () => {
   const context = useContext(StrategyContext);
@@ -53,7 +71,7 @@ const convertDatesToObjects = (strategy: any): Strategy => {
   };
 };
 
-export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) => {
+const StrategyProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Initialiser l'état avec les données du localStorage si elles existent
   const [strategies, setStrategies] = useState<Strategy[]>(() => {
     try {
@@ -83,6 +101,8 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
       return null;
     }
   });
+
+  const [investors, setInvestors] = useState<Investor[]>([]);
 
   // Sauvegarder les stratégies dans le localStorage à chaque changement
   useEffect(() => {
@@ -132,53 +152,81 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
           console.log("StrategyContext - Stratégie trouvée:", strategy);
           
           // Calculer le montant total investi dans la stratégie (existant + nouveaux investisseurs)
-          const existingInvestmentTotal = strategy.investors.reduce((sum, investor) => sum + investor.investedAmount, 0);
-          const newInvestmentTotal = investors.reduce((sum, investor) => sum + investor.investedAmount, 0);
-          const totalInvestment = existingInvestmentTotal + newInvestmentTotal;
+          const existingTotalInvestment = strategy.investors.reduce((sum, inv) => sum + inv.investedAmount, 0);
+          const newTotalInvestment = investors.reduce((sum, inv) => sum + inv.investedAmount, 0);
+          const totalInvestment = existingTotalInvestment + newTotalInvestment;
           
-          console.log("StrategyContext - Montant total investi:", totalInvestment);
+          // Mettre à jour les pourcentages de détention pour les investisseurs existants
+          const updatedExistingInvestors = strategy.investors.map((investor) => {
+            const newOwnershipPercentage = (investor.investedAmount / totalInvestment) * 100;
+            return {
+              ...investor,
+              ownershipPercentage: newOwnershipPercentage,
+            };
+          });
           
-          // Créer les nouveaux investisseurs avec leurs pourcentages de propriété
+          // Créer les nouveaux investisseurs avec leurs pourcentages de détention
           const newInvestors = investors.map((investor) => {
             const ownershipPercentage = (investor.investedAmount / totalInvestment) * 100;
             
-            // Calculer les montants initiaux pour les wallets
-            const initialCallAmount = (investor.investedAmount * strategy.initialCallPercentage) / 100;
-            const spvAmount = (initialCallAmount * strategy.targetFundPercentage) / 100;
-            const sansoAmount = initialCallAmount - spvAmount;
+            // Calculer la répartition des fonds selon le pourcentage d'appel initial
+            const spvAmount = (investor.investedAmount * strategy.initialCallPercentage) / 100;
+            const sansoAmount = investor.investedAmount - spvAmount;
             
-            return {
-              id: uuidv4(),
+            // Calculer les frais de structuration et de gestion
+            const structurationFee = investor.investedAmount * 0.03; // 3% de frais de structuration
+            
+            // Calculer la durée en années entre la date de début et l'horizon d'investissement
+            const startDate = new Date(strategy.startDate);
+            const endDate = new Date(strategy.investmentHorizon);
+            const durationInYears = (endDate.getFullYear() - startDate.getFullYear()) || 1; // Minimum 1 an
+            
+            const managementFee = investor.investedAmount * 0.017 * durationInYears; // 1,7% par an
+            const totalFundoraFees = structurationFee + managementFee;
+            
+            // Déterminer le solde initial du wallet investisseur
+            const initialBalance = investor.initialBalance || (investor.investedAmount + totalFundoraFees);
+            
+            // Le wallet investisseur commence avec le solde initial moins le montant investi et les frais
+            const investorWalletBalance = initialBalance - investor.investedAmount - totalFundoraFees;
+            
+            // Vérifier si l'investisseur existe déjà dans le système global
+            // Nous utilisons le nom comme identifiant temporaire puisque l'objet investor n'a pas d'ID à ce stade
+            const existingInvestor = investors.find(inv => inv.name === investor.name);
+            
+            // Générer un nouvel ID uniquement si l'investisseur n'existe pas déjà
+            const investorId = existingInvestor ? existingInvestor.name : uuidv4();
+            
+            // Créer l'objet investisseur
+            const newInvestor: Investor = {
+              id: investorId,
               name: investor.name,
               investedAmount: investor.investedAmount,
               ownershipPercentage,
+              initialBalance,
               wallets: {
-                investor: investor.investedAmount - initialCallAmount, // Montant restant à appeler
-                spv: spvAmount, // Montant investi dans le fonds cible
-                sanso: sansoAmount, // Montant placé chez SANSO
-                fundora: 0, // Frais Fundora (à implémenter)
+                investor: investorWalletBalance,
+                spv: spvAmount,
+                sanso: sansoAmount,
+                fundora: totalFundoraFees,
               },
               transactions: {
-                sansoInterest: 0, // Pas encore de coupons reçus
-                targetFundDistribution: 0, // Pas encore de distributions reçues
+                sansoInterest: 0,
+                targetFundDistribution: 0,
               },
               history: {
                 sansoInterests: [],
                 targetFundDistributions: [],
               },
-              globalInvestorId: investor.globalInvestorId, // Référence à l'investisseur global
+              globalInvestorId: investor.globalInvestorId,
             };
-          });
-          
-          console.log("StrategyContext - Nouveaux investisseurs créés:", newInvestors);
-          
-          // Recalculer les pourcentages de propriété pour tous les investisseurs existants
-          const updatedExistingInvestors = strategy.investors.map((investor) => {
-            const updatedOwnershipPercentage = (investor.investedAmount / totalInvestment) * 100;
-            return {
-              ...investor,
-              ownershipPercentage: updatedOwnershipPercentage,
-            };
+            
+            // Ajouter ou mettre à jour l'investisseur dans la liste globale des investisseurs
+            if (!existingInvestor) {
+              setInvestors(prevInvestors => [...prevInvestors, newInvestor]);
+            }
+            
+            return newInvestor;
           });
           
           const updatedStrategy = {
@@ -229,20 +277,20 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
             entryNav: simulation.entryNav,
             exitNav: simulation.exitNav,
             interestRate: interestRate,
-            year: simulation.year, // Utiliser l'année fournie dans la simulation
-            daysPeriod: daysDifference, // Ajouter le nombre de jours pour référence
+            year: simulation.year,
+            daysPeriod: daysDifference,
           };
           
           return {
             ...investor,
             transactions: {
               ...investor.transactions,
-              sansoInterest: investor.transactions.sansoInterest + sansoInterest, // Ajouter au total
+              sansoInterest: investor.transactions.sansoInterest + sansoInterest,
             },
             wallets: {
               ...investor.wallets,
-              sanso: investor.wallets.sanso - sansoInterest, // Déduire du wallet SANSO
-              investor: investor.wallets.investor + sansoInterest, // Ajouter au wallet Investisseur (cash-in)
+              sanso: investor.wallets.sanso - sansoInterest,
+              investor: investor.wallets.investor + sansoInterest,
             },
             history: {
               ...investor.history,
@@ -292,8 +340,8 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
             },
             wallets: {
               ...investor.wallets,
-              spv: investor.wallets.spv - distributionAmount, // Déduire du wallet SPV
-              investor: investor.wallets.investor + distributionAmount, // Ajouter au wallet Investisseur (cash-in)
+              spv: investor.wallets.spv - distributionAmount,
+              investor: investor.wallets.investor + distributionAmount,
             },
             history: {
               ...investor.history,
@@ -317,6 +365,52 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
     });
   };
 
+  const getInvestorById = (investorId: string): Investor | undefined => {
+    return investors.find(investor => investor.id === investorId);
+  };
+
+  const getInvestorStrategies = (investorId: string): Strategy[] => {
+    return strategies.filter(strategy => 
+      strategy.investors.some(investor => investor.id === investorId)
+    );
+  };
+
+  const getTotalSansoInterest = (investorId: string): number => {
+    let totalInterest = 0;
+    
+    // Parcourir toutes les stratégies où l'investisseur a participé
+    const investorStrategies = getInvestorStrategies(investorId);
+    
+    investorStrategies.forEach(strategy => {
+      const investor = strategy.investors.find(inv => inv.id === investorId);
+      if (investor) {
+        totalInterest += investor.transactions.sansoInterest;
+      }
+    });
+    
+    return totalInterest;
+  };
+
+  const getCapTable = (strategyId: string): CapTableEntry[] => {
+    const strategy = strategies.find(strategy => strategy.id === strategyId);
+    if (!strategy) return [];
+
+    const capTable: CapTableEntry[] = strategy.investors.map(investor => ({
+      investorId: investor.id,
+      investorName: investor.name,
+      investedAmount: investor.investedAmount,
+      spvWallet: investor.wallets.spv,
+      sansoWallet: investor.wallets.sanso,
+      sansoInterest: investor.transactions.sansoInterest,
+      targetFundDistribution: investor.transactions.targetFundDistribution,
+      investorWallet: investor.wallets.investor,
+      sansoInterestHistory: investor.history.sansoInterests,
+      targetFundDistributionHistory: investor.history.targetFundDistributions
+    }));
+
+    return capTable;
+  };
+
   const value = {
     strategies,
     currentStrategy,
@@ -325,6 +419,11 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
     addInvestorsToStrategy,
     simulateSansoInterest,
     simulatePEDistribution,
+    getCapTable,
+    getInvestorById,
+    getInvestorStrategies,
+    getTotalSansoInterest,
+    investors,
   };
 
   return (
@@ -333,3 +432,5 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
     </StrategyContext.Provider>
   );
 };
+
+export { StrategyContext, StrategyProvider };

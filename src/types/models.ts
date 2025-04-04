@@ -4,6 +4,7 @@ export interface Investor {
   name: string;
   investedAmount: number; // Montant total investi (commit)
   ownershipPercentage: number; // Pourcentage de détention dans la stratégie
+  initialBalance?: number; // Solde initial de l'investisseur avant tout investissement
   wallets: {
     investor: number; // Solde disponible dans le wallet de l'investisseur (anciennement "final")
     spv: number; // Fonds investis dans le fonds cible (anciennement "invested")

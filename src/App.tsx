@@ -19,6 +19,9 @@ import CreateStrategy from './components/CreateStrategy';
 import SimulateSansoInterest from './components/SimulateSansoInterest';
 import SimulatePEDistribution from './components/SimulatePEDistribution';
 import CapTable from './components/CapTable';
+import InvestorFinancialHistory from './components/InvestorFinancialHistory';
+import StrategyFinancialSummary from './components/StrategyFinancialSummary';
+import StrategySelector from './components/StrategySelector';
 
 // Create a theme instance
 const theme = createTheme({
@@ -91,6 +94,8 @@ function App() {
               </AppBar>
               
               <Container maxWidth="lg" sx={{ mt: 4 }}>
+                <StrategySelector />
+                
                 <Paper sx={{ mb: 4 }}>
                   <Tabs 
                     value={tabValue} 
@@ -103,6 +108,8 @@ function App() {
                     <Tab label="Simuler coupon SANSO" />
                     <Tab label="Simuler distribution PE" />
                     <Tab label="Cap Table" />
+                    <Tab label="Historique financier" />
+                    <Tab label="Résumé financier stratégie" />
                   </Tabs>
                 </Paper>
                 
@@ -120,6 +127,14 @@ function App() {
                 
                 <TabPanel value={tabValue} index={3}>
                   <CapTable />
+                </TabPanel>
+                
+                <TabPanel value={tabValue} index={4}>
+                  <InvestorFinancialHistory />
+                </TabPanel>
+                
+                <TabPanel value={tabValue} index={5}>
+                  <StrategyFinancialSummary />
                 </TabPanel>
               </Container>
             </Box>

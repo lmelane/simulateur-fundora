@@ -12,12 +12,15 @@ import {
   InputAdornment,
   FormControlLabel,
   Switch,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { useStrategy } from '../context/StrategyContext';
 import { useGlobalInvestor } from '../context/GlobalInvestorContext';
 import { Investor } from '../types/models';
+import InvestorSelector from './InvestorSelector';
 
 const validationSchema = Yup.object({
   investors: Yup.array().of(
@@ -26,6 +29,9 @@ const validationSchema = Yup.object({
       investedAmount: Yup.number()
         .required('Le montant investi est requis')
         .positive('Le montant doit être positif'),
+      initialBalance: Yup.number()
+        .required('Le solde initial est requis')
+        .min(0, 'Le solde ne peut pas être négatif'),
     })
   ),
 });
@@ -33,6 +39,7 @@ const validationSchema = Yup.object({
 interface InvestorFormValues {
   name: string;
   investedAmount: number;
+  initialBalance: number;
   globalInvestorId?: string;
   history: {
     sansoInterests: [];
@@ -50,9 +57,10 @@ const AddInvestors: React.FC = () => {
   const [numInvestors, setNumInvestors] = useState(10);
   const [useExistingInvestors, setUseExistingInvestors] = useState(true);
   const [newInvestorsPercentage, setNewInvestorsPercentage] = useState(30); // 30% de nouveaux investisseurs par défaut
+  const [tabValue, setTabValue] = useState(0);
 
   const initialValues: AddInvestorsFormValues = {
-    investors: [{ name: '', investedAmount: 0, history: { sansoInterests: [], targetFundDistributions: [] } }],
+    investors: [{ name: '', investedAmount: 0, initialBalance: 0, history: { sansoInterests: [], targetFundDistributions: [] } }],
   };
 
   const handleSubmit = (values: AddInvestorsFormValues) => {
@@ -88,10 +96,13 @@ const AddInvestors: React.FC = () => {
       for (const investor of selectedInvestors) {
         // Montant d'investissement entre 100 et 30 000 euros
         const investedAmount = Math.round(100 + Math.random() * 29900);
+        // Solde initial entre le montant investi et le montant investi + 50 000 euros
+        const initialBalance = investedAmount + Math.round(Math.random() * 50000);
         
         investors.push({
           name: investor.name,
           investedAmount,
+          initialBalance,
           globalInvestorId: investor.id, // Référence à l'investisseur global
           history: {
             sansoInterests: [],
@@ -113,18 +124,13 @@ const AddInvestors: React.FC = () => {
         
         // Montant d'investissement entre 100 et 30 000 euros
         const investedAmount = Math.round(100 + Math.random() * 29900);
-        
-        // Créer un nouvel investisseur global
-        const newGlobalInvestor = addInvestor({
-          name: fullName,
-          email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@example.com`,
-          phone: `+33${Math.floor(Math.random() * 900000000) + 100000000}`,
-        });
+        // Solde initial entre le montant investi et le montant investi + 50 000 euros
+        const initialBalance = investedAmount + Math.round(Math.random() * 50000);
         
         investors.push({
           name: fullName,
           investedAmount,
-          globalInvestorId: newGlobalInvestor.id, // Référence à l'investisseur global
+          initialBalance,
           history: {
             sansoInterests: [],
             targetFundDistributions: [],
@@ -143,6 +149,10 @@ const AddInvestors: React.FC = () => {
     }
   };
 
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
   if (!currentStrategy) {
     return (
       <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
@@ -159,58 +169,73 @@ const AddInvestors: React.FC = () => {
         Ajouter des investisseurs à {currentStrategy.name}
       </Typography>
       
-      <Box sx={{ mb: 4 }}>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
-          <Typography variant="h6">Génération automatique d'investisseurs</Typography>
-          
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <TextField
-              label="Nombre d'investisseurs"
-              type="number"
-              value={numInvestors}
-              onChange={(e) => setNumInvestors(Math.min(500, Math.max(1, parseInt(e.target.value) || 1)))}
-              inputProps={{ min: 1, max: 500 }}
-              sx={{ width: 200 }}
-            />
+      <Tabs value={tabValue} onChange={handleTabChange} sx={{ mb: 3 }}>
+        <Tab label="Nouveaux investisseurs" />
+        <Tab label="Investisseurs existants" />
+      </Tabs>
+
+      {tabValue === 0 ? (
+        <Box sx={{ mb: 4 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mb: 3 }}>
+            <Typography variant="h6">Génération automatique d'investisseurs</Typography>
             
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={useExistingInvestors}
-                  onChange={(e) => setUseExistingInvestors(e.target.checked)}
-                />
-              }
-              label="Utiliser des investisseurs existants"
-            />
-            
-            {useExistingInvestors && (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <TextField
-                label="% de nouveaux investisseurs"
+                label="Nombre d'investisseurs"
                 type="number"
-                value={newInvestorsPercentage}
-                onChange={(e) => setNewInvestorsPercentage(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                inputProps={{ min: 0, max: 100 }}
+                value={numInvestors}
+                onChange={(e) => setNumInvestors(Math.min(500, Math.max(1, parseInt(e.target.value) || 1)))}
+                inputProps={{ min: 1, max: 500 }}
                 sx={{ width: 200 }}
               />
-            )}
+              
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={useExistingInvestors}
+                    onChange={(e) => setUseExistingInvestors(e.target.checked)}
+                  />
+                }
+                label="Utiliser des investisseurs existants"
+              />
+              
+              {useExistingInvestors && (
+                <TextField
+                  label="% de nouveaux investisseurs"
+                  type="number"
+                  value={newInvestorsPercentage}
+                  onChange={(e) => setNewInvestorsPercentage(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                  inputProps={{ min: 0, max: 100 }}
+                  sx={{ width: 200 }}
+                />
+              )}
+              
+              <Button
+                variant="contained"
+                color="primary"
+                onClick={handleGenerateInvestors}
+                disabled={!currentStrategy}
+              >
+                Générer {numInvestors} investisseurs
+              </Button>
+            </Box>
             
-            <Button
-              variant="contained"
-              color="primary"
-              onClick={handleGenerateInvestors}
-              disabled={!currentStrategy}
-            >
-              Générer {numInvestors} investisseurs
-            </Button>
+            <Typography variant="body2" color="text.secondary">
+              {useExistingInvestors 
+                ? `Utilisation de ${100 - newInvestorsPercentage}% d'investisseurs existants et ${newInvestorsPercentage}% de nouveaux investisseurs.`
+                : "Création uniquement de nouveaux investisseurs."}
+            </Typography>
           </Box>
-          
-          <Typography variant="body2" color="text.secondary">
-            {useExistingInvestors 
-              ? `Utilisation de ${100 - newInvestorsPercentage}% d'investisseurs existants et ${newInvestorsPercentage}% de nouveaux investisseurs.`
-              : "Création uniquement de nouveaux investisseurs."}
-          </Typography>
         </Box>
-      </Box>
+      ) : (
+        <InvestorSelector 
+          onInvestorsSelected={(selectedInvestors) => {
+            if (currentStrategy && selectedInvestors.length > 0) {
+              addInvestorsToStrategy(currentStrategy.id, selectedInvestors);
+            }
+          }} 
+        />
+      )}
       
       <Divider sx={{ my: 3 }} />
       
@@ -230,19 +255,22 @@ const AddInvestors: React.FC = () => {
                 <>
                   {values.investors.length > 0 && (
                     <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                      <Box sx={{ flex: '5 1 0' }}>
+                      <Box sx={{ flex: '4 1 0' }}>
                         <Typography variant="subtitle2">Nom</Typography>
                       </Box>
-                      <Box sx={{ flex: '5 1 0' }}>
+                      <Box sx={{ flex: '3 1 0' }}>
+                        <Typography variant="subtitle2">Solde initial (€)</Typography>
+                      </Box>
+                      <Box sx={{ flex: '3 1 0' }}>
                         <Typography variant="subtitle2">Montant investi (€)</Typography>
                       </Box>
-                      <Box sx={{ flex: '2 1 0' }}></Box>
+                      <Box sx={{ flex: '1 1 0' }}></Box>
                     </Box>
                   )}
                   
                   {values.investors.map((_, index) => (
                     <Box key={index} sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                      <Box sx={{ flex: '5 1 0' }}>
+                      <Box sx={{ flex: '4 1 0' }}>
                         <Field name={`investors.${index}.name`}>
                           {({ field, meta }: FieldProps) => (
                             <TextField
@@ -256,7 +284,25 @@ const AddInvestors: React.FC = () => {
                         </Field>
                       </Box>
                       
-                      <Box sx={{ flex: '5 1 0' }}>
+                      <Box sx={{ flex: '3 1 0' }}>
+                        <Field name={`investors.${index}.initialBalance`}>
+                          {({ field, meta }: FieldProps) => (
+                            <TextField
+                              {...field}
+                              fullWidth
+                              type="number"
+                              label="Solde initial"
+                              InputProps={{
+                                endAdornment: <InputAdornment position="end">€</InputAdornment>,
+                              }}
+                              error={!!(meta.touched && meta.error)}
+                              helperText={meta.touched && meta.error ? meta.error : ''}
+                            />
+                          )}
+                        </Field>
+                      </Box>
+                      
+                      <Box sx={{ flex: '3 1 0' }}>
                         <Field name={`investors.${index}.investedAmount`}>
                           {({ field, meta }: FieldProps) => (
                             <TextField
@@ -274,7 +320,7 @@ const AddInvestors: React.FC = () => {
                         </Field>
                       </Box>
                       
-                      <Box sx={{ flex: '2 1 0', display: 'flex', alignItems: 'center' }}>
+                      <Box sx={{ flex: '1 1 0', display: 'flex', alignItems: 'center' }}>
                         <IconButton
                           onClick={() => remove(index)}
                           disabled={values.investors.length === 1}
@@ -290,7 +336,7 @@ const AddInvestors: React.FC = () => {
                       type="button"
                       variant="outlined"
                       startIcon={<AddIcon />}
-                      onClick={() => push({ name: '', investedAmount: 0, history: { sansoInterests: [], targetFundDistributions: [] } })}
+                      onClick={() => push({ name: '', investedAmount: 0, initialBalance: 0, history: { sansoInterests: [], targetFundDistributions: [] } })}
                     >
                       Ajouter un investisseur
                     </Button>
