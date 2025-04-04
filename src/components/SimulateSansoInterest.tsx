@@ -162,6 +162,11 @@ const SimulateSansoInterest: React.FC = () => {
     // Calculate interest rate based on NAV difference
     const interestRate = ((values.exitNav - values.entryNav) / values.entryNav) * 100;
     
+    // Calculate number of days between entry and exit dates
+    const entryDate = new Date(values.entryDate);
+    const exitDate = new Date(values.exitDate);
+    const daysDifference = Math.floor((exitDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
+    
     simulateSansoInterest(values.strategyId, {
       entryNav: values.entryNav,
       exitNav: values.exitNav,

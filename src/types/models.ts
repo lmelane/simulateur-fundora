@@ -59,6 +59,7 @@ export interface SansoInterestHistory {
   exitNav: number; // VL de sortie
   interestRate: number; // Taux d'intérêt appliqué
   year: number; // Année de distribution
+  daysPeriod?: number; // Nombre de jours entre la date d'entrée et la date de sortie
 }
 
 // Historique des distributions PE

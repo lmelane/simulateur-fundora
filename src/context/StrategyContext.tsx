@@ -211,10 +211,16 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
         // Calculate interest rate based on NAV difference
         const interestRate = ((simulation.exitNav - simulation.entryNav) / simulation.entryNav) * 100;
         
+        // Calculate number of days between entry and exit dates
+        const entryDate = new Date(simulation.entryDate);
+        const exitDate = new Date(simulation.exitDate);
+        const daysDifference = Math.floor((exitDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24));
+        const timeFactorAdjustment = daysDifference / 365;
+        
         // Update each investor's Sanso interest and wallets
         const updatedInvestors = strategy.investors.map((investor) => {
-          // Calculate interest amount based on SANSO wallet amount and interest rate
-          const sansoInterest = (investor.wallets.sanso * interestRate) / 100;
+          // Calculate interest amount based on SANSO wallet amount, interest rate, and time factor
+          const sansoInterest = (investor.wallets.sanso * interestRate / 100) * timeFactorAdjustment;
           
           // Create historical record
           const sansoInterestRecord = {
@@ -224,6 +230,7 @@ export const StrategyProvider: React.FC<StrategyProviderProps> = ({ children }) 
             exitNav: simulation.exitNav,
             interestRate: interestRate,
             year: simulation.year, // Utiliser l'année fournie dans la simulation
+            daysPeriod: daysDifference, // Ajouter le nombre de jours pour référence
           };
           
           return {
