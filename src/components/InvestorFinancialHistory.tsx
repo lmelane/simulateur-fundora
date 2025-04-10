@@ -22,12 +22,12 @@ import {
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { useStrategy } from '../context/StrategyContext';
-import { Investor, Strategy, SansoInterestHistory, PEDistributionHistory } from '../types/models';
+import { Investor, Strategy, SansoInterestHistory, PEDistributionHistory, FundoraFeesHistory, FundCallHistory } from '../types/models';
 
 // Types pour les transactions financières
 interface FinancialTransaction {
   date: Date;
-  type: 'subscription' | 'fundora_fee' | 'sanso_interest' | 'pe_distribution';
+  type: 'subscription' | 'fundora_fee' | 'sanso_interest' | 'pe_distribution' | 'fund_call';
   amount: number;
   description: string;
   strategyName: string;
@@ -99,6 +99,10 @@ const InvestorFinancialHistory: React.FC = () => {
     let totalIn = 0;
     let totalOut = 0;
 
+    // Solde initial par défaut de 100 000 € si non spécifié
+    const initialBalance = investor.initialBalance || 100000;
+    let currentBalance = initialBalance;
+
     // Ajouter les souscriptions initiales
     strategies.forEach((strategy: Strategy) => {
       const investorInStrategy = strategy.investors.find(inv => inv.id === selectedInvestorId);
@@ -113,47 +117,42 @@ const InvestorFinancialHistory: React.FC = () => {
         description: `Souscription initiale à la stratégie ${strategy.name}`,
         strategyName: strategy.name,
         strategyId: strategy.id,
-        balance: 0, // Sera calculé plus tard
+        balance: currentBalance, // Sera calculé plus tard
       });
       totalOut += investorInStrategy.investedAmount;
+      currentBalance -= investorInStrategy.investedAmount;
 
-      // Frais Fundora (sortie de fonds)
-      const fundoraFee = investorInStrategy.wallets.fundora;
-      if (fundoraFee > 0) {
-        // Calculer les frais de structuration (3%)
-        const structurationFee = investorInStrategy.investedAmount * 0.03;
-        
-        // Calculer la durée en années entre la date de début et l'horizon d'investissement
-        const startDate = new Date(strategy.startDate);
-        const endDate = new Date(strategy.investmentHorizon);
-        const durationInYears = (endDate.getFullYear() - startDate.getFullYear()) || 1;
-        
-        // Calculer les frais de gestion (1,7% par an)
-        const managementFee = investorInStrategy.investedAmount * 0.017 * durationInYears;
-        
-        // Frais de structuration
-        transactions.push({
-          date: new Date(subscriptionDate.getTime() + 1000), // 1 seconde après la souscription
-          type: 'fundora_fee',
-          amount: -structurationFee, // Négatif car c'est une sortie
-          description: `Frais de structuration (3%) pour la stratégie ${strategy.name}`,
-          strategyName: strategy.name,
-          strategyId: strategy.id,
-          balance: 0, // Sera calculé plus tard
+      // Frais Fundora depuis l'historique (si disponible)
+      if (investorInStrategy.history?.fundoraFees && investorInStrategy.history.fundoraFees.length > 0) {
+        investorInStrategy.history.fundoraFees.forEach((feeHistory: FundoraFeesHistory) => {
+          transactions.push({
+            date: new Date(feeHistory.date),
+            type: 'fundora_fee',
+            amount: -feeHistory.totalFee, // Négatif car c'est une sortie du wallet investisseur
+            description: `Frais Fundora (Structuration: ${feeHistory.structurationFee.toLocaleString('fr-FR')} €, Gestion: ${feeHistory.managementFee.toLocaleString('fr-FR')} €)`,
+            strategyName: strategy.name,
+            strategyId: strategy.id,
+            balance: currentBalance, // Sera calculé plus tard
+          });
+          totalOut += feeHistory.totalFee;
+          currentBalance -= feeHistory.totalFee;
         });
-        
-        // Frais de gestion
-        transactions.push({
-          date: new Date(subscriptionDate.getTime() + 2000), // 2 secondes après la souscription
-          type: 'fundora_fee',
-          amount: -managementFee, // Négatif car c'est une sortie
-          description: `Frais de gestion (1,7% × ${durationInYears} ans) pour la stratégie ${strategy.name}`,
-          strategyName: strategy.name,
-          strategyId: strategy.id,
-          balance: 0, // Sera calculé plus tard
-        });
-        
-        totalOut += fundoraFee;
+      } else {
+        // Fallback: utiliser les frais depuis l'objet investor si l'historique n'est pas disponible
+        const fundoraFee = investorInStrategy.fees.total;
+        if (fundoraFee > 0) {
+          transactions.push({
+            date: subscriptionDate,
+            type: 'fundora_fee',
+            amount: -fundoraFee, // Négatif car c'est une sortie du wallet investisseur
+            description: `Frais Fundora (Structuration: ${investorInStrategy.fees.structuration.toLocaleString('fr-FR')} €, Gestion: ${investorInStrategy.fees.management.toLocaleString('fr-FR')} €)`,
+            strategyName: strategy.name,
+            strategyId: strategy.id,
+            balance: currentBalance, // Sera calculé plus tard
+          });
+          totalOut += fundoraFee;
+          currentBalance -= fundoraFee;
+        }
       }
 
       // Ajouter les coupons SANSO
@@ -167,9 +166,10 @@ const InvestorFinancialHistory: React.FC = () => {
             description: `Coupon SANSO (${interest.year || 'N/A'}) - Taux: ${interest.interestRate.toFixed(2)}% - Période: ${interest.daysPeriod} jours`,
             strategyName: strategy.name,
             strategyId: strategy.id,
-            balance: 0, // Sera calculé plus tard
+            balance: currentBalance, // Sera calculé plus tard
           });
           totalIn += interest.amount;
+          currentBalance += interest.amount;
         });
       }
 
@@ -182,26 +182,20 @@ const InvestorFinancialHistory: React.FC = () => {
           description: `Distribution PE - Multiple: ${distribution.multiple.toFixed(2)}x`,
           strategyName: strategy.name,
           strategyId: strategy.id,
-          balance: 0, // Sera calculé plus tard
+          balance: currentBalance, // Sera calculé plus tard
         });
         totalIn += distribution.amount;
+        currentBalance += distribution.amount;
       });
     });
 
     // Trier les transactions par date
     transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-    // Calculer le solde après chaque transaction
-    let runningBalance = investor.initialBalance || 0;
-    transactions.forEach(transaction => {
-      runningBalance += transaction.amount;
-      transaction.balance = runningBalance;
-    });
-
     setFinancialData({
       investor,
       transactions,
-      currentBalance: runningBalance,
+      currentBalance,
       totalIn,
       totalOut
     });
@@ -262,23 +256,23 @@ const InvestorFinancialHistory: React.FC = () => {
   };
 
   // Obtenir la couleur pour le type de transaction
-  const getTransactionTypeColor = (type: string) => {
+  const getTransactionTypeColor = (type: string): string => {
     switch (type) {
       case 'subscription':
-        return 'error'; // Rouge pour les sorties
+        return 'primary';
       case 'fundora_fee':
-        return 'error'; // Rouge pour les sorties
+        return 'error';
       case 'sanso_interest':
-        return 'success'; // Vert pour les entrées
+        return 'success';
       case 'pe_distribution':
-        return 'success'; // Vert pour les entrées
+        return 'info';
       default:
         return 'default';
     }
   };
 
   // Obtenir le libellé pour le type de transaction
-  const getTransactionTypeLabel = (type: string) => {
+  const getTransactionTypeLabel = (type: string): string => {
     switch (type) {
       case 'subscription':
         return 'Souscription';
@@ -289,7 +283,7 @@ const InvestorFinancialHistory: React.FC = () => {
       case 'pe_distribution':
         return 'Distribution PE';
       default:
-        return type;
+        return 'Inconnu';
     }
   };
 
@@ -322,13 +316,15 @@ const InvestorFinancialHistory: React.FC = () => {
             <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
               <Box sx={{ width: { xs: '100%', sm: '33%' } }}>
                 <FormControl fullWidth>
-                  <InputLabel>Type de transaction</InputLabel>
+                  <InputLabel id="transaction-type-label">Type de transaction</InputLabel>
                   <Select
+                    labelId="transaction-type-label"
+                    id="transaction-type"
                     value={transactionType}
-                    onChange={handleTransactionTypeChange}
                     label="Type de transaction"
+                    onChange={handleTransactionTypeChange}
                   >
-                    <MenuItem value="all">Tous les types</MenuItem>
+                    <MenuItem value="all">Toutes les transactions</MenuItem>
                     <MenuItem value="subscription">Souscriptions</MenuItem>
                     <MenuItem value="fundora_fee">Frais Fundora</MenuItem>
                     <MenuItem value="sanso_interest">Coupons SANSO</MenuItem>
@@ -368,7 +364,7 @@ const InvestorFinancialHistory: React.FC = () => {
                   <Box sx={{ width: '33%' }}>
                     <Typography variant="subtitle1">Solde initial</Typography>
                     <Typography variant="h6">
-                      {(financialData.investor.initialBalance || 0).toLocaleString('fr-FR')} €
+                      {(financialData.investor.initialBalance || 100000).toLocaleString('fr-FR')} €
                     </Typography>
                   </Box>
                   <Box sx={{ width: '33%' }}>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Effacer le localStorage - Fundora</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        button {
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 10px;
+        }
+        button:hover {
+            background-color: #d32f2f;
+        }
+        .success {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 20px;
+            display: none;
+        }
+        .back-button {
+            background-color: #2196F3;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Effacer les données du localStorage</h1>
+    <div class="container">
+        <h2>Attention !</h2>
+        <p>Cette action va supprimer toutes les données de l'application Fundora stockées dans votre navigateur :</p>
+        <ul>
+            <li>Toutes les stratégies</li>
+            <li>Tous les investisseurs</li>
+            <li>Toutes les simulations</li>
+        </ul>
+        <p>Cette action est <strong>irréversible</strong>. Vous devrez recréer toutes vos données après cette opération.</p>
+        
+        <button id="clearButton">Effacer toutes les données</button>
+        
+        <div id="successMessage" class="success">
+            <p>Toutes les données ont été supprimées avec succès !</p>
+            <p>Vous pouvez maintenant retourner à l'application et commencer avec un état propre.</p>
+        </div>
+        
+        <button id="backButton" class="back-button">Retourner à l'application</button>
+    </div>
+
+    <script>
+        document.getElementById('clearButton').addEventListener('click', function() {
+            // Effacer toutes les données du localStorage
+            localStorage.clear();
+            
+            // Afficher le message de succès
+            document.getElementById('successMessage').style.display = 'block';
+            
+            // Désactiver le bouton d'effacement
+            this.disabled = true;
+            this.textContent = 'Données effacées';
+            
+            console.log('Toutes les données du localStorage ont été supprimées avec succès');
+        });
+        
+        document.getElementById('backButton').addEventListener('click', function() {
+            window.location.href = '/';
+        });
+    </script>
+</body>
+</html>

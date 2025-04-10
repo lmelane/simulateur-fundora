@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Paper,
   Typography,
@@ -9,18 +9,31 @@ import {
   TableHead,
   TableRow,
   Box,
+  Button,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
 } from '@mui/material';
 import { useStrategy } from '../context/StrategyContext';
-import { CapTableEntry } from '../types/models';
+import { CapTableEntry, FundCallHistory } from '../types/models';
 
 const CapTable: React.FC = () => {
   const { currentStrategy } = useStrategy();
+  const [openFundCallHistory, setOpenFundCallHistory] = useState(false);
+  const [selectedInvestor, setSelectedInvestor] = useState<CapTableEntry | null>(null);
 
   // Ajouter du débogage
   console.log("CapTable - currentStrategy:", currentStrategy);
   if (currentStrategy) {
     console.log("CapTable - investors:", currentStrategy.investors);
     console.log("CapTable - investors length:", currentStrategy.investors.length);
+    console.log("CapTable - investors type:", Array.isArray(currentStrategy.investors) ? "Array" : typeof currentStrategy.investors);
+    
+    // Vérifier si les investisseurs ont les propriétés attendues
+    if (currentStrategy.investors.length > 0) {
+      console.log("CapTable - Premier investisseur:", currentStrategy.investors[0]);
+    }
   }
 
   if (!currentStrategy || currentStrategy.investors.length === 0) {
@@ -34,22 +47,35 @@ const CapTable: React.FC = () => {
   }
 
   // Generate cap table entries from current strategy
-  const capTableEntries: CapTableEntry[] = currentStrategy.investors.map(investor => ({
-    investorId: investor.id,
-    investorName: investor.name,
-    investedAmount: investor.investedAmount,
-    spvWallet: investor.wallets.spv,
-    sansoWallet: investor.wallets.sanso,
-    sansoInterest: investor.transactions.sansoInterest,
-    targetFundDistribution: investor.transactions.targetFundDistribution,
-    investorWallet: investor.wallets.investor,
-    sansoInterestHistory: investor.history.sansoInterests,
-    targetFundDistributionHistory: investor.history.targetFundDistributions,
-  }));
+  const capTableEntries: CapTableEntry[] = currentStrategy.investors.map(investor => {
+    // Utiliser l'historique des appels de fonds pour calculer le montant de l'appel de fonds initial
+    const initialFundCallAmount = investor.history.fundCalls.reduce((sum, fundCall) => sum + fundCall.amount, 0);
+
+    return {
+      investorId: investor.id,
+      investorName: investor.name,
+      paidAmount: investor.paidAmount,
+      investedAmount: investor.investedAmount,
+      nonInvestedAmount: investor.wallets.sanso,
+      ownershipPercentage: investor.ownershipPercentage,
+      spvWallet: investor.wallets.spv,
+      sansoWallet: investor.wallets.sanso,
+      sansoInterest: investor.transactions.sansoInterest,
+      targetFundDistribution: investor.transactions.targetFundDistribution,
+      investorWallet: investor.wallets.investor,
+      initialFundCallAmount,
+      sansoInterestHistory: investor.history.sansoInterests,
+      targetFundDistributionHistory: investor.history.targetFundDistributions,
+      fundCallsHistory: investor.history.fundCalls,
+    };
+  });
 
   // Calculate totals for the footer
   const totals = {
+    paidAmount: capTableEntries.reduce((sum, entry) => sum + entry.paidAmount, 0),
     investedAmount: capTableEntries.reduce((sum, entry) => sum + entry.investedAmount, 0),
+    nonInvestedAmount: capTableEntries.reduce((sum, entry) => sum + entry.nonInvestedAmount, 0),
+    initialFundCallAmount: capTableEntries.reduce((sum, entry) => sum + entry.initialFundCallAmount, 0),
     spvWallet: capTableEntries.reduce((sum, entry) => sum + entry.spvWallet, 0),
     sansoWallet: capTableEntries.reduce((sum, entry) => sum + entry.sansoWallet, 0),
     sansoInterest: capTableEntries.reduce((sum, entry) => sum + entry.sansoInterest, 0),
@@ -67,6 +93,20 @@ const CapTable: React.FC = () => {
     }).format(amount);
   };
 
+  // Format number as percentage with 2 decimal places
+  const formatPercentage = (percentage: number) => {
+    return percentage.toFixed(2);
+  };
+
+  const handleOpenFundCallHistory = (investor: CapTableEntry) => {
+    setSelectedInvestor(investor);
+    setOpenFundCallHistory(true);
+  };
+
+  const handleCloseFundCallHistory = () => {
+    setOpenFundCallHistory(false);
+  };
+
   return (
     <Paper elevation={3} sx={{ p: 4, mb: 4 }}>
       <Typography variant="h5" component="h2" gutterBottom>
@@ -78,12 +118,14 @@ const CapTable: React.FC = () => {
           <TableHead>
             <TableRow sx={{ bgcolor: 'primary.main' }}>
               <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Nom</TableCell>
-              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Montant Investi</TableCell>
-              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Wallet SPV</TableCell>
-              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Wallet SANSO</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Montant payé</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Montant investi</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Montant non investi</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Pourcentage de détention</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Appel de fonds N°1</TableCell>
               <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Coupon SANSO</TableCell>
               <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Distribution Fonds Cible</TableCell>
-              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Wallet Investisseur</TableCell>
+              <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Historique des appels de fonds</TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
@@ -92,12 +134,18 @@ const CapTable: React.FC = () => {
                 <TableCell component="th" scope="row">
                   {entry.investorName}
                 </TableCell>
+                <TableCell align="right">{formatCurrency(entry.paidAmount)}</TableCell>
                 <TableCell align="right">{formatCurrency(entry.investedAmount)}</TableCell>
-                <TableCell align="right">{formatCurrency(entry.spvWallet)}</TableCell>
-                <TableCell align="right">{formatCurrency(entry.sansoWallet)}</TableCell>
+                <TableCell align="right">{formatCurrency(entry.nonInvestedAmount)}</TableCell>
+                <TableCell align="right">{formatPercentage(entry.ownershipPercentage)}%</TableCell>
+                <TableCell align="right">{formatCurrency(entry.initialFundCallAmount)}</TableCell>
                 <TableCell align="right">{formatCurrency(entry.sansoInterest)}</TableCell>
                 <TableCell align="right">{formatCurrency(entry.targetFundDistribution)}</TableCell>
-                <TableCell align="right">{formatCurrency(entry.investorWallet)}</TableCell>
+                <TableCell align="right">
+                  <Button variant="contained" onClick={() => handleOpenFundCallHistory(entry)}>
+                    Voir l'historique
+                  </Button>
+                </TableCell>
               </TableRow>
             ))}
             
@@ -106,12 +154,14 @@ const CapTable: React.FC = () => {
               <TableCell component="th" scope="row" sx={{ fontWeight: 'bold' }}>
                 TOTAL
               </TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.paidAmount)}</TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.investedAmount)}</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.spvWallet)}</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.sansoWallet)}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.nonInvestedAmount)}</TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}></TableCell>
+              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.initialFundCallAmount)}</TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.sansoInterest)}</TableCell>
               <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.targetFundDistribution)}</TableCell>
-              <TableCell align="right" sx={{ fontWeight: 'bold' }}>{formatCurrency(totals.investorWallet)}</TableCell>
+              <TableCell align="right"></TableCell>
             </TableRow>
           </TableBody>
         </Table>
@@ -122,43 +172,35 @@ const CapTable: React.FC = () => {
           Résumé des flux financiers
         </Typography>
         
-        <Box sx={{ 
-          p: 2, 
-          bgcolor: 'background.paper', 
+        <Box sx={{
+          mt: 3,
+          p: 2,
+          border: 1,
           borderRadius: 1,
-          border: '1px solid',
           borderColor: 'divider',
         }}>
+          <Typography variant="body1" paragraph>
+            <strong>Montant total payé:</strong> {formatCurrency(totals.paidAmount)}
+          </Typography>
+          
           <Typography variant="body1" paragraph>
             <strong>Montant total investi:</strong> {formatCurrency(totals.investedAmount)}
           </Typography>
           
           <Typography variant="body1" paragraph>
-            <strong>Appel initial ({currentStrategy.initialCallPercentage}%):</strong> {formatCurrency(totals.spvWallet)}
+            <strong>Montant total non investi:</strong> {formatCurrency(totals.nonInvestedAmount)}
           </Typography>
           
           <Typography variant="body1" paragraph>
-            <strong>Trésorerie non investie:</strong> {formatCurrency(totals.sansoWallet)}
+            <strong>Appel initial ({currentStrategy.initialCallPercentage}%):</strong> {formatCurrency(totals.initialFundCallAmount)}
           </Typography>
           
           <Typography variant="body1" paragraph>
-            <strong>Revenus générés:</strong>
-          </Typography>
-          
-          <Typography variant="body1" sx={{ pl: 2 }} paragraph>
-            • Coupon SANSO: {formatCurrency(totals.sansoInterest)}
-          </Typography>
-          
-          <Typography variant="body1" sx={{ pl: 2 }} paragraph>
-            • Distribution Fonds Cible: {formatCurrency(totals.targetFundDistribution)}
+            <strong>Total coupons SANSO:</strong> {formatCurrency(totals.sansoInterest)}
           </Typography>
           
           <Typography variant="body1" paragraph>
-            <strong>Solde disponible dans les wallets investisseurs:</strong> {formatCurrency(totals.investorWallet)}
-          </Typography>
-          
-          <Typography variant="body1" paragraph>
-            <strong>Performance globale:</strong> {((totals.investorWallet / totals.investedAmount) * 100).toFixed(2)}%
+            <strong>Total distributions fonds cible:</strong> {formatCurrency(totals.targetFundDistribution)}
           </Typography>
         </Box>
       </Box>
@@ -252,6 +294,35 @@ const CapTable: React.FC = () => {
           </TableBody>
         </Table>
       </Box>
+      
+      <Dialog open={openFundCallHistory} onClose={handleCloseFundCallHistory}>
+        <DialogTitle>Histoire des appels de fonds pour {selectedInvestor?.investorName}</DialogTitle>
+        <DialogContent>
+          <Table>
+            <TableHead>
+              <TableRow sx={{ bgcolor: 'primary.main' }}>
+                <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Appel de fonds</TableCell>
+                <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Date</TableCell>
+                <TableCell align="right" sx={{ color: 'white', fontWeight: 'bold' }}>Montant</TableCell>
+              </TableRow>
+            </TableHead>
+            <TableBody>
+              {(selectedInvestor?.fundCallsHistory || []).map((fundCall: FundCallHistory, index: number) => (
+                <TableRow key={`${selectedInvestor?.investorId}-fundCall-${index}`}>
+                  <TableCell component="th" scope="row">
+                    Appel de fonds {fundCall.callNumber}
+                  </TableCell>
+                  <TableCell align="right">{new Date(fundCall.date).toLocaleDateString()}</TableCell>
+                  <TableCell align="right">{formatCurrency(fundCall.amount)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleCloseFundCallHistory}>Fermer</Button>
+        </DialogActions>
+      </Dialog>
     </Paper>
   );
 };

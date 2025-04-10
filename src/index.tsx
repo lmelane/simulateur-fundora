@@ -4,6 +4,11 @@ import './index.css';
 import App from './App';
 import reportWebVitals from './reportWebVitals';
 
+// Effacer complètement le localStorage au démarrage de l'application
+// Ceci est temporaire pour résoudre les problèmes de persistance des données
+localStorage.clear();
+console.log("localStorage complètement effacé au démarrage de l'application");
+
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
 );

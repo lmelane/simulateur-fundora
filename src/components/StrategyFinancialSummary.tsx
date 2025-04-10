@@ -21,6 +21,7 @@ import {
 } from '@mui/material';
 import { useStrategy } from '../context/StrategyContext';
 import { Strategy, Investor } from '../types/models';
+import FundraisingStatus from './FundraisingStatus';
 
 // Types pour les transactions consolidées
 interface ConsolidatedTransaction {
@@ -381,6 +382,11 @@ const StrategyFinancialSummary: React.FC = () => {
 
       {selectedStrategyId && (
         <>
+          {/* Afficher le composant FundraisingStatus */}
+          {strategies.find(s => s.id === selectedStrategyId) && (
+            <FundraisingStatus strategy={strategies.find(s => s.id === selectedStrategyId)!} />
+          )}
+
           <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
             <Tabs value={tabValue} onChange={handleTabChange} aria-label="wallet tabs">
               <Tab label="SPV (Fonds Cible)" id="wallet-tab-0" aria-controls="wallet-tabpanel-0" />

@@ -22,6 +22,7 @@ import CapTable from './components/CapTable';
 import InvestorFinancialHistory from './components/InvestorFinancialHistory';
 import StrategyFinancialSummary from './components/StrategyFinancialSummary';
 import StrategySelector from './components/StrategySelector';
+import NewFundCall from './components/NewFundCall';
 
 // Create a theme instance
 const theme = createTheme({
@@ -100,11 +101,13 @@ function App() {
                   <Tabs 
                     value={tabValue} 
                     onChange={handleTabChange}
-                    variant="fullWidth"
+                    variant="scrollable"
+                    scrollButtons="auto"
                     indicatorColor="primary"
                     textColor="primary"
                   >
                     <Tab label="Créer une stratégie" />
+                    <Tab label="Appel de fonds" />
                     <Tab label="Simuler coupon SANSO" />
                     <Tab label="Simuler distribution PE" />
                     <Tab label="Cap Table" />
@@ -118,22 +121,26 @@ function App() {
                 </TabPanel>
                 
                 <TabPanel value={tabValue} index={1}>
-                  <SimulateSansoInterest />
+                  <NewFundCall />
                 </TabPanel>
                 
                 <TabPanel value={tabValue} index={2}>
-                  <SimulatePEDistribution />
+                  <SimulateSansoInterest />
                 </TabPanel>
                 
                 <TabPanel value={tabValue} index={3}>
-                  <CapTable />
+                  <SimulatePEDistribution />
                 </TabPanel>
                 
                 <TabPanel value={tabValue} index={4}>
-                  <InvestorFinancialHistory />
+                  <CapTable />
                 </TabPanel>
                 
                 <TabPanel value={tabValue} index={5}>
+                  <InvestorFinancialHistory />
+                </TabPanel>
+                
+                <TabPanel value={tabValue} index={6}>
                   <StrategyFinancialSummary />
                 </TabPanel>
               </Container>
